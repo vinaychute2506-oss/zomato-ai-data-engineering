@@ -1,0 +1,28 @@
+﻿services:
+
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: zomato_airflow
+    restart: unless-stopped
+
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: "${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE}"
+      DBT_PROFILES_DIR: "/opt/airflow/dbt_profiles"
+
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./airflow_home:/opt/airflow
+      - ../dbt:/opt/airflow/dbt
+      - ../secrets:/opt/airflow/secrets:ro
+      - ./dbt_profiles:/opt/airflow/dbt_profiles:ro
+
+    ports:
+      - "8080:8080"
+
+    command: standalone

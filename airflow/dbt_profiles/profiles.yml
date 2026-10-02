@@ -1,0 +1,13 @@
+﻿zomato_ai_data_engineering:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: YYVFUAZ-PS43291
+      user: VINAYCHUTE
+      private_key_path: /opt/airflow/secrets/snowflake_key.p8
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PASSPHRASE') }}"
+      database: ZOMATO_DB
+      warehouse: COMPUTE_WH
+      schema: STAGING
+      threads: 4

@@ -84,3 +84,10 @@ data/sample/*
 
 # Snowflake private keys
 secrets/
+
+airflow/.env
+
+airflow/airflow_home/
+airflow/logs/
+
+ai/.env
