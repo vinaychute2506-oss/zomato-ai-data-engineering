@@ -1,0 +1,83 @@
+﻿# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and IDE configurations
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# dbt artifacts and logs
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+target/
+dbt_packages/
+logs/
+
+# Apache Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+airflow/*.pid
+
+# Testing and Python cache
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Data files & Large datasets (keep directory structure via .gitkeep)
+data/raw/*
+!data/raw/.gitkeep
+data/sample/*
+!data/sample/.gitkeep
+*.csv
+*.tsv
+*.parquet
+*.jsonl
+*.gz
+*.tar.gz
+*.zip
