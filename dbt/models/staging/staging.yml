@@ -1,0 +1,57 @@
+version: 2
+
+models:
+
+  - name: stg_users
+    description: "Cleaned user records."
+    columns:
+      - name: user_id
+        description: "Unique identifier for a user."
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_restaurants
+    description: "Cleaned restaurant records."
+    columns:
+      - name: restaurant_id
+        description: "Unique identifier for a restaurant."
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_food
+    description: "Cleaned food records."
+    columns:
+      - name: food_id
+        description: "Unique identifier for a food item."
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_reviews
+    description: "Cleaned customer review records."
+    columns:
+      - name: review_id
+        description: "Unique identifier for a review."
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_order_items
+    description: "Cleaned order item records."
+    columns:
+      - name: order_item_id
+        description: "Unique identifier for an order item."
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_orders
+    description: "Cleaned order-level records."
+    columns:
+      - name: order_id
+        description: "Unique identifier for an order."
+        data_tests:
+          - not_null
+          - unique

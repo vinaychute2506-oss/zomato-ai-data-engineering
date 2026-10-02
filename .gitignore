@@ -81,3 +81,6 @@ data/sample/*
 *.gz
 *.tar.gz
 *.zip
+
+# Snowflake private keys
+secrets/

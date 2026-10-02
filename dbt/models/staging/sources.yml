@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: zomato_raw
+    description: "Raw Zomato data loaded into Snowflake from Amazon S3."
+    database: ZOMATO_DB
+    schema: RAW
+
+    tables:
+      - name: USERS_RAW
+        description: "Raw customer/user records."
+
+      - name: RESTAURANT_RAW
+        description: "Raw restaurant records."
+
+      - name: FOOD_RAW
+        description: "Raw food/item records."
+
+      - name: MENU_RAW
+        description: "Raw restaurant menu mappings and prices."
+
+      - name: REVIEWS_RAW
+        description: "Raw customer restaurant reviews."
+
+      - name: ORDER_ITEMS_RAW
+        description: "Raw individual items belonging to orders."
+
+      - name: ORDERS_RAW
+        description: "Raw order-level transaction records."
