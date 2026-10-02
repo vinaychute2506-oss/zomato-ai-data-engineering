@@ -1,0 +1,119 @@
+{
+  "generated": "2026-10-02",
+  "files": {
+    "users.csv": {
+      "size_bytes": 11239820,
+      "rows": 100000,
+      "columns": 12
+    },
+    "restaurant.csv": {
+      "size_bytes": 46731352,
+      "rows": 148541,
+      "columns": 12
+    },
+    "food.csv": {
+      "size_bytes": 17208649,
+      "rows": 371561,
+      "columns": 4
+    },
+    "menu.csv": {
+      "size_bytes": 65833035,
+      "rows": 1179936,
+      "columns": 6
+    },
+    "reviews.csv": {
+      "size_bytes": 25406720,
+      "rows": 300000,
+      "columns": 7
+    },
+    "order_items.csv": {
+      "size_bytes": 955117276,
+      "rows": 22998179,
+      "columns": 7
+    },
+    "orders.csv": {
+      "size_bytes": 1332004808,
+      "rows": 10000000,
+      "columns": 19
+    }
+  },
+  "total_rows": 35098217,
+  "candidate_primary_keys": {
+    "users.csv": "user_id",
+    "restaurant.csv": "id",
+    "food.csv": "f_id",
+    "menu.csv": "menu_id (DUPLICATE \u2014 not a clean PK)",
+    "reviews.csv": "review_id",
+    "order_items.csv": "order_item_id",
+    "orders.csv": "order_id"
+  },
+  "candidate_foreign_keys": [
+    {
+      "child": "orders.user_id",
+      "parent": "users.user_id",
+      "orphans_spot_check": 0
+    },
+    {
+      "child": "orders.r_id",
+      "parent": "restaurant.id",
+      "orphans_spot_check": "not checked"
+    },
+    {
+      "child": "order_items.order_id",
+      "parent": "orders.order_id",
+      "orphans_spot_check": "not checked"
+    },
+    {
+      "child": "order_items.r_id",
+      "parent": "restaurant.id",
+      "orphans_spot_check": "not checked"
+    },
+    {
+      "child": "order_items.f_id",
+      "parent": "food.f_id",
+      "orphans_spot_check": "not checked"
+    },
+    {
+      "child": "menu.r_id",
+      "parent": "restaurant.id",
+      "orphans_full_scan": 273
+    },
+    {
+      "child": "menu.f_id",
+      "parent": "food.f_id",
+      "orphans_full_scan": 0
+    },
+    {
+      "child": "reviews.user_id",
+      "parent": "users.user_id",
+      "orphans_full_scan": 0
+    },
+    {
+      "child": "reviews.restaurant_id",
+      "parent": "restaurant.id",
+      "orphans_full_scan": 0
+    },
+    {
+      "child": "reviews.order_id",
+      "parent": "orders.order_id",
+      "orphans_spot_check": "not checked"
+    }
+  ],
+  "key_quality_issues": [
+    "menu.menu_id: 131,361 duplicate values \u2014 not a clean primary key",
+    "restaurant.rating: stored as string with '--' sentinel \u2014 needs CAST",
+    "restaurant.cost: contains currency symbol string \u2014 needs parse",
+    "orders.customer_rating: 35.93% null (expected for non-delivered orders)",
+    "orders.delivery_time_min: 8.50% null",
+    "menu.r_id: 273 orphan values (no matching restaurant.id)",
+    "Unnamed index columns in users, restaurant, food, menu (pandas artifact)",
+    "restaurant_city: compound locality+city strings in orders",
+    "reviews.comment: only 294 distinct values (template-generated)"
+  ],
+  "tutorial_differences": [
+    "File is 'restaurant.csv' (singular), not 'restaurants.csv' (plural) as mentioned in tutorial",
+    "menu_id is not a clean PK \u2014 131,361 duplicates exist",
+    "rating column in restaurant.csv is a string, not a float",
+    "customer_rating is 35.93% null \u2014 not fully populated"
+  ]
+}
