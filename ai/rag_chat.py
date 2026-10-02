@@ -1,26 +1,35 @@
+import json
 import os
 
-import numpy as np
 import ollama
 import snowflake.connector
-from dotenv import load_dotenv
 from cryptography.hazmat.primitives import serialization
+from dotenv import load_dotenv
 
+
+# =========================================================
+# LOAD ENVIRONMENT
+# =========================================================
 
 load_dotenv("ai/.env")
 
 
-def get_snowflake_connection():
-    with open(
-        os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"],
-        "rb",
-    ) as key_file:
+# =========================================================
+# SNOWFLAKE CONNECTION
+# =========================================================
 
+def get_snowflake_connection():
+    """Connect to Snowflake using the RSA private key."""
+
+    private_key_path = os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"]
+    private_key_passphrase = os.environ[
+        "SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"
+    ]
+
+    with open(private_key_path, "rb") as key_file:
         private_key = serialization.load_pem_private_key(
             key_file.read(),
-            password=os.environ[
-                "SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"
-            ].encode(),
+            password=private_key_passphrase.encode(),
         )
 
     private_key_der = private_key.private_bytes(
@@ -39,87 +48,110 @@ def get_snowflake_connection():
     )
 
 
-def get_embedding(text):
+# =========================================================
+# QUERY EMBEDDING
+# =========================================================
+
+def get_query_embedding(query):
+    """Generate a 768-dimensional embedding for the query."""
+
     response = ollama.embed(
         model="nomic-embed-text",
-        input=text,
+        input=query,
     )
 
-    return np.array(
-        response["embeddings"][0]
-    )
+    embedding = response["embeddings"][0]
+
+    if len(embedding) != 768:
+        raise ValueError(
+            f"Expected 768 dimensions, got {len(embedding)}"
+        )
+
+    return embedding
 
 
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (
-        np.linalg.norm(a)
-        * np.linalg.norm(b)
-    )
-
+# =========================================================
+# RETRIEVE REVIEWS
+# =========================================================
 
 def retrieve_reviews(query, top_k=3):
+
+    print("\nGenerating query embedding...")
+
+    query_embedding = get_query_embedding(query)
+
+    # Convert Python list into JSON.
+    embedding_json = json.dumps(
+        [float(value) for value in query_embedding]
+    )
+
+    print("Searching stored review embeddings...")
 
     conn = get_snowflake_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    sql = """
         SELECT
-            REVIEW_ID,
-            REVIEW_TEXT,
-            SENTIMENT_LABEL,
-            TOPIC,
-            KEY_ISSUE
-        FROM ZOMATO_DB.AI.REVIEW_ENRICHED
-        WHERE REVIEW_TEXT IS NOT NULL
-        ORDER BY TRY_TO_NUMBER(REVIEW_ID)
-        """
+            e.REVIEW_ID AS REVIEW_ID,
+            e.REVIEW_TEXT AS REVIEW_TEXT,
+            r.SENTIMENT_LABEL AS SENTIMENT_LABEL,
+            r.TOPIC AS TOPIC,
+            r.KEY_ISSUE AS KEY_ISSUE,
+            VECTOR_COSINE_SIMILARITY(
+                e.EMBEDDING,
+                PARSE_JSON(%s)::VECTOR(FLOAT, 768)
+            ) AS SIMILARITY_SCORE
+        FROM ZOMATO_DB.AI.REVIEW_EMBEDDINGS AS e
+        INNER JOIN ZOMATO_DB.AI.REVIEW_ENRICHED AS r
+            ON e.REVIEW_ID = r.REVIEW_ID
+        WHERE e.EMBEDDING IS NOT NULL
+        ORDER BY SIMILARITY_SCORE DESC
+        LIMIT %s
+    """
+
+    cursor.execute(
+        sql,
+        (
+            embedding_json,
+            top_k,
+        ),
     )
 
-    reviews = cursor.fetchall()
+    rows = cursor.fetchall()
 
     cursor.close()
     conn.close()
 
-    query_embedding = get_embedding(query)
-
     results = []
 
-    for (
-        review_id,
-        review_text,
-        sentiment,
-        topic,
-        key_issue,
-    ) in reviews:
+    for row in rows:
 
-        review_embedding = get_embedding(
-            review_text
-        )
-
-        score = cosine_similarity(
-            query_embedding,
-            review_embedding,
-        )
+        (
+            review_id,
+            review_text,
+            sentiment,
+            topic,
+            key_issue,
+            similarity_score,
+        ) = row
 
         results.append(
             {
-                "score": score,
                 "review_id": review_id,
                 "review_text": review_text,
                 "sentiment": sentiment,
                 "topic": topic,
                 "key_issue": key_issue,
+                "score": float(similarity_score),
             }
         )
 
-    results.sort(
-        key=lambda x: x["score"],
-        reverse=True,
-    )
+    return results
 
-    return results[:top_k]
 
+# =========================================================
+# GENERATE LLM ANSWER
+# =========================================================
 
 def generate_answer(query, retrieved_reviews):
 
@@ -134,6 +166,7 @@ Review: {review["review_text"]}
 Sentiment: {review["sentiment"]}
 Topic: {review["topic"]}
 Key issue: {review["key_issue"]}
+Similarity score: {review["score"]:.4f}
 """
         )
 
@@ -142,21 +175,27 @@ Key issue: {review["key_issue"]}
     prompt = f"""
 You are a data assistant analyzing Zomato customer reviews.
 
-Answer the user's question using ONLY the retrieved review context below.
-
-If the context does not contain enough information to answer,
-say that the available reviews do not provide enough information.
+Answer the user's question using ONLY the retrieved review context.
 
 Do not invent facts.
 
+If the retrieved context does not contain enough information,
+say that the available reviews do not provide enough information.
+
+Mention relevant review IDs when useful.
+
 Retrieved review context:
+
 {context}
 
 User question:
+
 {query}
 
-Give a concise answer and mention the relevant review IDs when useful.
+Give a concise and factual answer.
 """
+
+    print("\nGenerating answer with llama3.2...\n")
 
     response = ollama.chat(
         model="llama3.2",
@@ -171,39 +210,83 @@ Give a concise answer and mention the relevant review IDs when useful.
     return response["message"]["content"]
 
 
+# =========================================================
+# MAIN
+# =========================================================
+
 def main():
+
+    print("\n========================================")
+    print("          ZOMATO RAG CHAT")
+    print("========================================")
 
     query = input(
         "\nAsk about the reviews: "
-    )
+    ).strip()
 
-    print("\nSearching reviews...\n")
+    if not query:
+        print("Please enter a question.")
+        return
 
+    # Retrieve relevant reviews
     retrieved_reviews = retrieve_reviews(
         query,
         top_k=3,
     )
 
-    print("Retrieved reviews:")
+    if not retrieved_reviews:
+        print("\nNo reviews were found.")
+        return
+
+    # Display retrieved reviews
+    print("\nTOP MATCHING REVIEWS:")
+    print("-" * 60)
 
     for review in retrieved_reviews:
 
         print(
-            f'{review["score"]:.4f} '
-            f'→ Review {review["review_id"]}: '
-            f'{review["review_text"]}'
+            f"Score: {review['score']:.4f}"
         )
 
-    print("\nGenerating answer...\n")
+        print(
+            f"Review ID: {review['review_id']}"
+        )
 
+        print(
+            f"Review: {review['review_text']}"
+        )
+
+        print(
+            f"Sentiment: {review['sentiment']}"
+        )
+
+        print(
+            f"Topic: {review['topic']}"
+        )
+
+        print(
+            f"Key issue: {review['key_issue']}"
+        )
+
+        print("-" * 60)
+
+    # Generate final answer
     answer = generate_answer(
         query,
         retrieved_reviews,
     )
 
-    print("ANSWER:")
+    print("\nANSWER:")
     print(answer)
 
+    print("\n========================================")
+    print("              COMPLETE")
+    print("========================================\n")
+
+
+# =========================================================
+# ENTRY POINT
+# =========================================================
 
 if __name__ == "__main__":
     main()
