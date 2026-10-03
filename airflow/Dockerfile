@@ -2,4 +2,8 @@
 
 USER airflow
 
-RUN pip install --no-cache-dir apache-airflow-providers-snowflake dbt-snowflake
+RUN pip install --no-cache-dir \
+    apache-airflow-providers-snowflake \
+    dbt-snowflake \
+    ollama \
+    python-dotenv

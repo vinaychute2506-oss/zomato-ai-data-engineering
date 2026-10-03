@@ -9,9 +9,11 @@
     restart: unless-stopped
 
     environment:
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: "${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE}"
-      DBT_PROFILES_DIR: "/opt/airflow/dbt_profiles"
+     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+     SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: "${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE}"
+     SNOWFLAKE_PRIVATE_KEY_PATH: "/opt/airflow/secrets/snowflake_key.p8"
+     DBT_PROFILES_DIR: "/opt/airflow/dbt_profiles"
+     OLLAMA_HOST: "http://host.docker.internal:11434"
 
     volumes:
       - ./dags:/opt/airflow/dags
@@ -19,6 +21,7 @@
       - ./plugins:/opt/airflow/plugins
       - ./airflow_home:/opt/airflow
       - ../dbt:/opt/airflow/dbt
+      - ../ai:/opt/airflow/ai
       - ../secrets:/opt/airflow/secrets:ro
       - ./dbt_profiles:/opt/airflow/dbt_profiles:ro
 

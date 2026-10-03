@@ -7,20 +7,14 @@ from cryptography.hazmat.primitives import serialization
 from dotenv import load_dotenv
 
 
-# ---------------------------------------------------------
-# Load environment variables
-# ---------------------------------------------------------
-
 load_dotenv("ai/.env")
 
 
-# ---------------------------------------------------------
-# Snowflake connection
-# ---------------------------------------------------------
+# =========================================================
+# SNOWFLAKE CONNECTION
+# =========================================================
 
 def get_snowflake_connection():
-    """Create a Snowflake connection using the encrypted
-    Snowflake private key."""
 
     private_key_path = os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"]
     private_key_passphrase = os.environ[
@@ -39,7 +33,7 @@ def get_snowflake_connection():
         encryption_algorithm=serialization.NoEncryption(),
     )
 
-    connection = snowflake.connector.connect(
+    return snowflake.connector.connect(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
         private_key=private_key_der,
@@ -48,111 +42,115 @@ def get_snowflake_connection():
         schema=os.environ["SNOWFLAKE_SCHEMA"],
     )
 
-    return connection
 
-
-# ---------------------------------------------------------
-# Generate embedding
-# ---------------------------------------------------------
+# =========================================================
+# EMBEDDING
+# =========================================================
 
 def get_embedding(text):
-    """Generate a 768-dimensional embedding using
-    the local Ollama embedding model."""
 
     response = ollama.embed(
         model="nomic-embed-text",
         input=text,
     )
 
-    return response["embeddings"][0]
+    embedding = response["embeddings"][0]
+
+    if len(embedding) != 768:
+        raise ValueError(
+            f"Expected 768 dimensions, got {len(embedding)}"
+        )
+
+    return embedding
 
 
-# ---------------------------------------------------------
-# Main embedding pipeline
-# ---------------------------------------------------------
+# =========================================================
+# MAIN
+# =========================================================
 
 def main():
 
     print("\n========================================")
-    print(" ZOMATO REVIEW EMBEDDING PIPELINE")
+    print(" INCREMENTAL REVIEW EMBEDDING PIPELINE")
     print("========================================\n")
-
-    # Connect to Snowflake
-    print("Connecting to Snowflake...")
 
     conn = get_snowflake_connection()
     cursor = conn.cursor()
 
-    print("Snowflake connection successful.\n")
+    print("Connected to Snowflake.\n")
 
     # -----------------------------------------------------
-    # Clear previous embeddings
-    # -----------------------------------------------------
-
-    print("Clearing existing embeddings...")
-
-    cursor.execute(
-        """
-        TRUNCATE TABLE ZOMATO_DB.AI.REVIEW_EMBEDDINGS
-        """
-    )
-
-    conn.commit()
-
-    print("Embedding table cleared.\n")
-
-    # -----------------------------------------------------
-    # Fetch reviews
+    # Find new OR changed reviews
     # -----------------------------------------------------
 
     cursor.execute(
         """
         SELECT
-            REVIEW_ID,
-            REVIEW_TEXT
-        FROM ZOMATO_DB.AI.REVIEW_ENRICHED
-        WHERE REVIEW_TEXT IS NOT NULL
-        ORDER BY TRY_TO_NUMBER(REVIEW_ID)
+            r.REVIEW_ID,
+            r.REVIEW_TEXT
+        FROM ZOMATO_DB.AI.REVIEW_ENRICHED AS r
+        LEFT JOIN ZOMATO_DB.AI.REVIEW_EMBEDDINGS AS e
+            ON r.REVIEW_ID = e.REVIEW_ID
+           AND r.REVIEW_TEXT = e.REVIEW_TEXT
+        WHERE r.REVIEW_TEXT IS NOT NULL
+          AND e.REVIEW_ID IS NULL
+        ORDER BY TRY_TO_NUMBER(r.REVIEW_ID)
         """
     )
 
     reviews = cursor.fetchall()
 
-    print(f"Found {len(reviews)} reviews.\n")
+    print(
+        f"Reviews requiring embeddings: {len(reviews)}\n"
+    )
 
-    # -----------------------------------------------------
-    # Generate and store embeddings
-    # -----------------------------------------------------
+    if not reviews:
+
+        print(
+            "No new or changed reviews require embeddings."
+        )
+
+        cursor.close()
+        conn.close()
+
+        return
 
     successful = 0
     failed = 0
 
+    # -----------------------------------------------------
+    # Generate embeddings
+    # -----------------------------------------------------
+
     for review_id, review_text in reviews:
 
-        print(f"Embedding review {review_id}...")
+        print(
+            f"Processing review {review_id}..."
+        )
 
         try:
 
-            # Generate embedding using Ollama
-            embedding = get_embedding(review_text)
-
-            # Validate vector size
-            if len(embedding) != 768:
-                raise ValueError(
-                    f"Expected 768 dimensions, "
-                    f"received {len(embedding)}"
-                )
-
-            # Convert Python list to JSON
-            embedding_json = json.dumps(
-                [float(value) for value in embedding]
+            embedding = get_embedding(
+                review_text
             )
 
-            # Insert embedding into Snowflake.
-            #
-            # PARSE_JSON converts the JSON string into
-            # a Snowflake value which can then be converted
-            # to VECTOR(FLOAT, 768).
+            embedding_json = json.dumps(
+                [
+                    float(value)
+                    for value in embedding
+                ]
+            )
+
+            # Remove any previous embedding for this ID.
+            cursor.execute(
+                """
+                DELETE FROM ZOMATO_DB.AI.REVIEW_EMBEDDINGS
+                WHERE REVIEW_ID = %s
+                """,
+                (review_id,),
+            )
+
+            # Insert the current embedding.
             cursor.execute(
                 """
                 INSERT INTO ZOMATO_DB.AI.REVIEW_EMBEDDINGS
@@ -183,47 +181,36 @@ def main():
             successful += 1
 
             print(
-                f"  ✓ Review {review_id} stored "
-                f"(768 dimensions)"
+                f"  ✓ Review {review_id} embedded"
             )
 
         except Exception as error:
 
+            conn.rollback()
+
             failed += 1
 
             print(
-                f"  ✗ Review {review_id} failed:"
+                f"  ✗ Review {review_id} failed"
             )
 
             print(
                 f"    {error}"
             )
 
-    # -----------------------------------------------------
-    # Close connection
-    # -----------------------------------------------------
-
     cursor.close()
     conn.close()
 
-    # -----------------------------------------------------
-    # Final status
-    # -----------------------------------------------------
-
     print("\n========================================")
-    print(" EMBEDDING PIPELINE COMPLETE")
+    print(" PIPELINE COMPLETE")
     print("========================================")
 
+    print(f"Processed:  {len(reviews)}")
     print(f"Successful: {successful}")
     print(f"Failed:     {failed}")
-    print(f"Total:      {len(reviews)}")
 
-    print("\n")
+    print()
 
-
-# ---------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------
 
 if __name__ == "__main__":
     main()

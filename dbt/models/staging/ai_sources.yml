@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: ai
+    database: ZOMATO_DB
+    schema: AI
+    description: "AI-generated review enrichment data"
+
+    tables:
+      - name: review_enriched
+        description: "AI-enriched restaurant review data"
